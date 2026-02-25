@@ -27,6 +27,7 @@ export class ClaimsController {
     @Post()
     async createOne(@Body() data: any) {
         return this.claimsService.createClaim(data);
+    }
     // Evidence endpoints
     @Post(':claimId/evidence')
     async createEvidence(@Param('claimId') claimId: string, @Body() body: { cid: string }) {

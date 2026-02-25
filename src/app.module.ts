@@ -164,7 +164,8 @@ async function createThrottlerStorage(configService: ConfigService): Promise<any
       type: 'sqlite',
       database: 'database.sqlite',
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: process.env.DATABASE_SYNCHRONIZE === 'true',
+      // Allow automatic sync in development unless explicitly disabled
+      synchronize: process.env.DATABASE_SYNCHRONIZE === 'true' || process.env.NODE_ENV !== 'production',
       logging: process.env.DATABASE_LOGGING === 'true',
     }),
     ThrottlerModule.forRootAsync({

@@ -8,7 +8,9 @@ export const dataSource = new DataSource({
   database: 'database.sqlite',
   entities: ['src/**/*.entity.ts'],
   migrations: ['src/migrations/*.ts'],
-  synchronize: false,
+  // In development, allow automatic schema sync so missing tables are created.
+  // Disable in production by setting NODE_ENV=production.
+  synchronize: process.env.NODE_ENV !== 'production',
 });
 
 export default dataSource;

@@ -4,6 +4,9 @@ import { Repository } from 'typeorm';
 import { Claim } from './entities/claim.entity';
 import { ClaimsCache } from '../cache/claims.cache';
 import { Stake } from '../staking/entities/stake.entity';
+import { AuditTrailService } from '../audit/services/audit-trail.service';
+import { AuditActionType, AuditEntityType } from '../audit/entities/audit-log.entity';
+import { AuditLog } from '../audit/decorators/audit-log.decorator';
 
 @Injectable()
 export class ClaimsService {
@@ -15,6 +18,7 @@ export class ClaimsService {
         @InjectRepository(Stake)
         private readonly stakeRepo: Repository<Stake>,
         private readonly claimsCache: ClaimsCache,
+        private readonly auditTrailService: AuditTrailService,
     ) { }
 
     /**
@@ -74,6 +78,12 @@ export class ClaimsService {
     /**
      * Create a new claim (Added for Load Testing purposes)
      */
+    @AuditLog({
+        actionType: AuditActionType.CLAIM_CREATED,
+        entityType: AuditEntityType.CLAIM,
+        descriptionTemplate: 'New claim created',
+        captureAfterState: true,
+    })
     async createClaim(data: any): Promise<Claim> {
         const claim = this.claimRepo.create({
             resolvedVerdict: Math.random() > 0.5,
@@ -86,5 +96,66 @@ export class ClaimsService {
         await this.claimsCache.setClaim(savedClaim.id, savedClaim);
 
         return savedClaim;
+    }
+
+    /**
+     * Resolve a claim (update verdict and confidence)
+     */
+    async resolveClaim(
+        claimId: string,
+        verdict: boolean,
+        confidenceScore: number,
+        userId?: string,
+    ): Promise<Claim> {
+        const claim = await this.findOne(claimId);
+        if (!claim) throw new Error(`Claim ${claimId} not found`);
+
+        const beforeState = { ...claim };
+
+        claim.resolvedVerdict = verdict;
+        claim.confidenceScore = confidenceScore;
+
+        const updatedClaim = await this.claimRepo.save(claim);
+        await this.claimsCache.setClaim(claimId, updatedClaim);
+
+        // Log the resolution
+        await this.auditTrailService.log({
+            actionType: AuditActionType.CLAIM_RESOLVED,
+            entityType: AuditEntityType.CLAIM,
+            entityId: claimId,
+            userId,
+            description: `Claim resolved with verdict: ${verdict}, confidence: ${confidenceScore}`,
+            beforeState,
+            afterState: updatedClaim,
+        });
+
+        return updatedClaim;
+    }
+
+    /**
+     * Finalize a claim
+     */
+    async finalizeClaim(claimId: string, userId?: string): Promise<Claim> {
+        const claim = await this.findOne(claimId);
+        if (!claim) throw new Error(`Claim ${claimId} not found`);
+
+        const beforeState = { ...claim };
+
+        claim.finalized = true;
+        const updatedClaim = await this.claimRepo.save(claim);
+        await this.claimsCache.setClaim(claimId, updatedClaim);
+
+        // Log the finalization
+        await this.auditTrailService.log({
+            actionType: AuditActionType.CLAIM_FINALIZED,
+            entityType: AuditEntityType.CLAIM,
+            entityId: claimId,
+            userId,
+            description: 'Claim finalized',
+            beforeState,
+            afterState: updatedClaim,
+        });
+
+        return updatedClaim;
     }
 }

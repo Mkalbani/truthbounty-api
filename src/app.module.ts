@@ -1,7 +1,7 @@
 import { Module, Logger } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { RewardsModule } from './rewards/rewards.module';
@@ -19,6 +19,8 @@ import { AggregationModule } from './aggregation/aggregation.module';
 import { JobsModule } from './jobs/jobs.module';
 import { CacheModule } from './cache/cache.module';
 import { ClaimsModule } from './claims/claims.module';
+import { AuditModule } from './audit/audit.module';
+import { AuditLoggingInterceptor } from './audit/interceptors/audit-logging.interceptor';
 
 // In-memory storage for development (no Redis needed)
 class ThrottlerMemoryStorage {
@@ -195,6 +197,7 @@ async function createThrottlerStorage(configService: ConfigService): Promise<any
     JobsModule,
     CacheModule,
     ClaimsModule,
+    AuditModule,
   ],
   controllers: [AppController],
   providers: [
@@ -202,6 +205,10 @@ async function createThrottlerStorage(configService: ConfigService): Promise<any
     {
       provide: APP_GUARD,
       useClass: WalletThrottlerGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLoggingInterceptor,
     },
   ],
 })

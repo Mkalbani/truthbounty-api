@@ -93,6 +93,8 @@ TruthBounty treats **blockchains as infrastructure, not lock-in**, enabling comm
 - 🌐 Sybil-resistant authentication via Worldcoin ID  
 - 📊 Real-time reputation scoring engine  
 - 🤖 AI-assisted fake-news detection (optional / pluggable)  
+- 📋 Comprehensive audit trail for all critical actions
+- 🔍 Complete traceability for claims, evidence, and rewards  
 
 ---
 

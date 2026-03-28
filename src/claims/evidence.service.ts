@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Evidence } from './entities/evidence.entity';
 import { EvidenceVersion } from './entities/evidence-version.entity';
+import { AuditTrailService } from '../audit/services/audit-trail.service';
+import { AuditActionType, AuditEntityType } from '../audit/entities/audit-log.entity';
 
 @Injectable()
 export class EvidenceService {
@@ -11,12 +13,17 @@ export class EvidenceService {
     private readonly evidenceRepository: Repository<Evidence>,
     @InjectRepository(EvidenceVersion)
     private readonly evidenceVersionRepository: Repository<EvidenceVersion>,
+    private readonly auditTrailService: AuditTrailService,
   ) {}
 
   /**
    * Create new evidence for a claim
    */
-  async createEvidence(claimId: string, cid: string): Promise<Evidence> {
+  async createEvidence(
+    claimId: string,
+    cid: string,
+    userId?: string,
+  ): Promise<Evidence> {
     const evidence = this.evidenceRepository.create({
       claimId,
       latestVersion: 1,
@@ -31,28 +38,61 @@ export class EvidenceService {
     });
     await this.evidenceVersionRepository.save(version);
 
+    // Log evidence submission
+    await this.auditTrailService.log({
+      actionType: AuditActionType.EVIDENCE_SUBMITTED,
+      entityType: AuditEntityType.EVIDENCE,
+      entityId: savedEvidence.id,
+      userId,
+      description: `Evidence submitted for claim ${claimId} with CID: ${cid}`,
+      afterState: {
+        id: savedEvidence.id,
+        claimId,
+        version: 1,
+        cid,
+      },
+    });
+
     return savedEvidence;
   }
 
   /**
    * Add a new version to existing evidence
    */
-  async addEvidenceVersion(evidenceId: string, cid: string): Promise<EvidenceVersion> {
+  async addEvidenceVersion(
+    evidenceId: string,
+    cid: string,
+    userId?: string,
+  ): Promise<EvidenceVersion> {
     const evidence = await this.evidenceRepository.findOneBy({ id: evidenceId });
     if (!evidence) {
       throw new NotFoundException(`Evidence with ID ${evidenceId} not found`);
     }
 
+    const beforeState = { ...evidence };
     const newVersion = evidence.latestVersion + 1;
     evidence.latestVersion = newVersion;
-    await this.evidenceRepository.save(evidence);
+    const updatedEvidence = await this.evidenceRepository.save(evidence);
 
     const version = this.evidenceVersionRepository.create({
       evidenceId,
       version: newVersion,
       cid,
     });
-    return this.evidenceVersionRepository.save(version);
+    const savedVersion = await this.evidenceVersionRepository.save(version);
+
+    // Log evidence update
+    await this.auditTrailService.log({
+      actionType: AuditActionType.EVIDENCE_UPDATED,
+      entityType: AuditEntityType.EVIDENCE,
+      entityId: evidenceId,
+      userId,
+      description: `Evidence updated to version ${newVersion} with CID: ${cid}`,
+      beforeState,
+      afterState: updatedEvidence,
+    });
+
+    return savedVersion;
   }
 
   /**
@@ -105,5 +145,34 @@ export class EvidenceService {
     return this.evidenceVersionRepository.findOne({
       where: { evidenceId: evidence.id, version: evidence.latestVersion },
     });
+  }
+
+  /**
+   * Mark evidence as verified
+   */
+  async verifyEvidence(
+    evidenceId: string,
+    userId?: string,
+  ): Promise<Evidence> {
+    const evidence = await this.evidenceRepository.findOneBy({ id: evidenceId });
+    if (!evidence) {
+      throw new NotFoundException(`Evidence with ID ${evidenceId} not found`);
+    }
+
+    const beforeState = { ...evidence };
+
+    // Here you would add actual verification logic
+    // For now, we just log the verification event
+    await this.auditTrailService.log({
+      actionType: AuditActionType.EVIDENCE_VERIFIED,
+      entityType: AuditEntityType.EVIDENCE,
+      entityId: evidenceId,
+      userId,
+      description: 'Evidence verified by user',
+      beforeState,
+      afterState: evidence,
+    });
+
+    return evidence;
   }
 }

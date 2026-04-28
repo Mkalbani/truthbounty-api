@@ -24,6 +24,8 @@ import { ThemeModule } from './theme.module';
 import { AuditLoggingInterceptor } from './audit/interceptors/audit-logging.interceptor';
 import { LoggerModule } from './logger/logger.module';
 import { LoggingInterceptor } from './logger/logging.interceptor';
+import { AuthModule } from './auth/auth.module';
+import { GlobalAuthGuard } from './auth/global-auth.guard';
 import { MetricsModule } from './metrics/metrics.module';
 
 // In-memory storage for development (no Redis needed)
@@ -245,6 +247,7 @@ async function createThrottlerStorage(configService: ConfigService): Promise<any
     }),
     RedisModule,
     LoggerModule,
+    AuthModule,
     BlockchainModule,
     DisputeModule,
     IdentityModule,
@@ -262,6 +265,10 @@ async function createThrottlerStorage(configService: ConfigService): Promise<any
   controllers: [AppController],
   providers: [
     AppService,
+    {
+      provide: APP_GUARD,
+      useClass: GlobalAuthGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: WalletThrottlerGuard,

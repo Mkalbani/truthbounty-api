@@ -6,10 +6,21 @@ import { Logger } from 'nestjs-pino';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
-  
+
   // Use Pino logger for structured JSON logging
   app.useLogger(app.get(Logger));
-  
+
+  // Configure trust proxy for IP extraction
+  // Only trust specific proxy IPs from environment variable
+  const trustedProxies =
+    process.env.TRUSTED_PROXIES?.split(',')?.map((ip) => ip.trim()) || [];
+  if (trustedProxies.length > 0) {
+    app.set('trust proxy', trustedProxies);
+  } else {
+    // Default: trust no proxies (disable x-forwarded-for processing)
+    app.set('trust proxy', false);
+  }
+
   // Enable strict validation
   app.useGlobalPipes(
     new ValidationPipe({
@@ -21,7 +32,6 @@ async function bootstrap() {
       },
     }),
   );
-  
 
   // Swagger configuration
   const config = new DocumentBuilder()
@@ -53,7 +63,7 @@ async function bootstrap() {
     .addTag('audit', 'Audit log retrieval')
     .addTag('health', 'Health check endpoints')
     .build();
-  
+
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
